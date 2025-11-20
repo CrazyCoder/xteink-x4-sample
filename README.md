@@ -1,5 +1,7 @@
 # Xteink X4 Sample
 
+![Sample](images/sample.png)
+
 A simple sample project for the Xteink X4 e-ink device using the GxEPD2 library.
 
 ## Hardware
