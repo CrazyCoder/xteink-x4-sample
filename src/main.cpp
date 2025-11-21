@@ -4,6 +4,7 @@
 #include <GxEPD2_BW.h>
 #include <SPI.h>
 #include "image.h"
+#include "Pangodream_18650_CL.h"
 
 // Display SPI pins (custom pins for XteinkX4, not hardware SPI defaults)
 #define EPD_SCLK 8  // SPI Clock
@@ -17,6 +18,16 @@
 #define BTN_GPIO1 1 // 4 buttons: Back, Confirm, Left, Right
 #define BTN_GPIO2 2 // 2 buttons: Volume Up, Volume Down
 #define BTN_GPIO3 3 // Power button
+#define BAT_GPIO  0 // Battery voltage
+
+#define ADC_PIN 0
+#define CONV_FACTOR 1.5176
+#define READS 10
+#define CHARGER_THRESHOLD 2770
+
+Pangodream_18650_CL BL(ADC_PIN, CONV_FACTOR, READS);
+
+static int rawBat = 0;
 
 // Button enum
 enum Button
@@ -37,6 +48,7 @@ enum DisplayCommand
   DISPLAY_NONE = 0,
   DISPLAY_HEADER,
   DISPLAY_TEXT,
+  DISPLAY_SLEEP,
   TOGGLE_IMAGE
 };
 
@@ -87,7 +99,7 @@ Button GetPressedButton()
   if (btn3 < BTN_POWER_VAL + BTN_THRESHOLD)
   {
     return POWER;
-  }  
+  }
   // Check BTN_GPIO1 (4 buttons on resistor ladder)
   if (btn1 < BTN_RIGHT_VAL + BTN_THRESHOLD)
   {
@@ -121,7 +133,8 @@ Button GetPressedButton()
 
 // GxEPD2 display - Using GxEPD2_426_GDEQ0426T82
 // Note: XteinkX4 has 4.26" 800x480 display
-GxEPD2_BW<GxEPD2_426_GDEQ0426T82, GxEPD2_426_GDEQ0426T82::HEIGHT> display(GxEPD2_426_GDEQ0426T82(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
+GxEPD2_BW<GxEPD2_426_GDEQ0426T82, GxEPD2_426_GDEQ0426T82::HEIGHT> display(
+  GxEPD2_426_GDEQ0426T82(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
 
 // FreeRTOS task for non-blocking display updates
 TaskHandle_t displayTaskHandle = NULL;
@@ -157,12 +170,14 @@ void displayUpdateTask(void *parameter)
           display.setFont(&FreeMonoBold12pt7b);
           display.setCursor(20, 100);
           display.print(getButtonName(currentPressedButton));
+          display.setCursor(20, 200);
+          display.print(esp_reset_reason());
         } while (display.nextPage());
       }
       else if (cmd == DISPLAY_TEXT)
       {
         // Use partial refresh for text updates
-        display.setPartialWindow(0, 75, display.width(), 150);
+        display.setPartialWindow(0, 75, display.width(), 300);
         display.firstPage();
         do
         {
@@ -170,6 +185,14 @@ void displayUpdateTask(void *parameter)
           display.setFont(&FreeMonoBold12pt7b);
           display.setCursor(20, 100);
           display.print(getButtonName(currentPressedButton));
+          display.setCursor(20, 160);
+          display.printf("Battery: %s", rawBat > CHARGER_THRESHOLD ? "Charging" : "Discharging");
+          display.setCursor(40, 200);
+          display.printf("Raw: %i", rawBat);
+          display.setCursor(40, 240);
+          display.printf("Volts: %.2f", BL.getBatteryVolts());
+          display.setCursor(40, 280);
+          display.printf("Charge level: %i%%", BL.getBatteryChargeLevel());
         } while (display.nextPage());
       }
       else if (cmd == TOGGLE_IMAGE)
@@ -190,6 +213,20 @@ void displayUpdateTask(void *parameter)
           }
         } while (display.nextPage());
       }
+      else if (cmd == DISPLAY_SLEEP)
+      {
+        // Use full window for initial welcome screen with header
+        display.setFullWindow();
+        display.firstPage();
+        do
+        {
+          display.fillScreen(GxEPD_WHITE);
+          // Header font
+          display.setFont(&FreeMonoBold18pt7b);
+          display.setCursor(120, 380);
+          display.print("Sleeping...");
+        } while (display.nextPage());
+      }
     }
     vTaskDelay(10 / portTICK_PERIOD_MS);
   }
@@ -197,6 +234,40 @@ void displayUpdateTask(void *parameter)
 
 void setup()
 {
+  // Check if boot was triggered by the Power Button (Deep Sleep Wakeup)
+  // If triggered by RST pin or Battery insertion, this will be false, allowing normal boot.
+  if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO)
+  {
+    // Woke up from sleep via Power Button. Verifying long press...
+    // Temporarily configure pin as digital input to check state
+    pinMode(BTN_GPIO3, INPUT);
+
+    const unsigned long LONG_PRESS_MS = 1500; // 1.5 seconds required
+    unsigned long pressStart = millis();
+    bool bootConfirmed = true;
+
+    // Monitor button state for the duration
+    while (millis() - pressStart < LONG_PRESS_MS)
+    {
+      // If button reads HIGH (released) before time is up
+      if (digitalRead(BTN_GPIO3) == HIGH)
+      {
+        bootConfirmed = false;
+        break;
+      }
+      delay(10);
+    }
+
+    if (!bootConfirmed)
+    {
+      // Button released too early. Returning to sleep.
+      pinMode(BTN_GPIO3, INPUT_PULLUP);
+      // IMPORTANT: Re-arm the wakeup trigger before sleeping again
+      esp_deep_sleep_enable_gpio_wakeup(1ULL << BTN_GPIO3, ESP_GPIO_WAKEUP_GPIO_LOW);
+      esp_deep_sleep_start();
+    }
+  }
+
   Serial.begin(115200);
 
   // Wait for serial monitor
@@ -206,14 +277,17 @@ void setup()
     delay(10);
   }
 
+
   Serial.println("\n=================================");
   Serial.println("  xteink x4 sample");
   Serial.println("=================================");
   Serial.println();
 
   // Initialize button pins
+  pinMode(BAT_GPIO, INPUT);
   pinMode(BTN_GPIO1, INPUT);
   pinMode(BTN_GPIO2, INPUT);
+  pinMode(BTN_GPIO3, INPUT);
 
   // Initialize SPI with custom pins
   SPI.begin(EPD_SCLK, -1, EPD_MOSI, EPD_CS);
@@ -257,6 +331,46 @@ void loop()
     Serial.println(getButtonName(currentButton));
     currentPressedButton = currentButton;
 
+
+    if (currentButton == POWER)
+    {
+      Serial.println("Power button pressed");
+      displayCommand = DISPLAY_TEXT;
+      // 1. Switch pin to Digital Input with Pull-up
+      // This is crucial! 'analogRead' configures the pin as ADC, often disabling the digital input buffer.
+      // If the digital buffer is disabled, the sleep controller reads '0' (LOW) and wakes immediately.
+      // The Pull-up also prevents the pin from floating if the external circuit is open.
+      pinMode(BTN_GPIO3, INPUT_PULLUP);
+
+      // 2. Wait for button release
+      // We wait until the digital state is HIGH (released)
+      unsigned long pressedTime = millis();
+      bool longPress = false;
+      while (digitalRead(BTN_GPIO3) == LOW)
+      {
+        delay(50);
+        if (millis() - pressedTime > 2000)
+        {
+          longPress = true;
+          break;
+        }
+      }
+
+      // Power button long pressed, go to sleep
+      if (longPress)
+      {
+        displayCommand = DISPLAY_SLEEP;
+        Serial.println("Power button released after a long press. Entering deep sleep.");
+        delay(2000); // Allow Serial buffer to empty and display to update
+
+        // 3. Enable Wakeup on LOW
+        esp_deep_sleep_enable_gpio_wakeup(1ULL << BTN_GPIO3, ESP_GPIO_WAKEUP_GPIO_LOW);
+
+        // 4. Enter Deep Sleep
+        esp_deep_sleep_start();
+      }
+    }
+
     if (currentButton == CONFIRM)
     {
       displayCommand = TOGGLE_IMAGE;
@@ -275,6 +389,7 @@ void loop()
   unsigned long now = millis();
   if (now - lastLogMs >= 1000)
   {
+    rawBat =  analogRead(BAT_GPIO);
     int rawBtn1 = analogRead(BTN_GPIO1);
     int rawBtn2 = analogRead(BTN_GPIO2);
     int rawBtn3 = analogRead(BTN_GPIO3);
@@ -283,7 +398,19 @@ void loop()
     Serial.print("    BTN2=");
     Serial.print(rawBtn2);
     Serial.print("    BTN3=");
-    Serial.println(rawBtn3);
+    Serial.print(rawBtn3);
+
+    Serial.println("");
+
+    Serial.print("Value from pin: ");
+    Serial.println(rawBat);
+    Serial.print("Average value from pin: ");
+    Serial.println(BL.pinRead());
+    Serial.print("Volts: ");
+    Serial.println(BL.getBatteryVolts());
+    Serial.print("Charge level: ");
+    Serial.println(BL.getBatteryChargeLevel());
+    Serial.println("");
     lastLogMs = now;
   }
   delay(50);
