@@ -87,14 +87,16 @@ python -m esptool --port COM4 write_flash 0xE000 otadata_boot_app1.bin
 - Display rotation is set to 3 (270 degrees)
 - Partial refresh is used for button presses to improve responsiveness
 
-## Open Tasks
+## Tasks
 
-- Better font rendering with grayscale support
-- ~~Power on/off~~
-- SD card reader
-- ~~Read battery percentage~~
-- WiFi
-- Bluetooth
+- [x] Drive screen
+- [x] Read buttons
+- [x] Wakeup and deep sleep
+- [x] Read battery percentage
+- [ ] Better rendering with grayscale support
+- [ ] SD card reader
+- [ ] WiFi
+- [ ] Bluetooth
 
 ## Button System
 
