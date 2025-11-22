@@ -2,14 +2,22 @@
 
 A simple sample project for the Xteink X4 e-ink device using the GxEPD2 library.
 
+Join our Discord server for support and discussion:
+
+- [Xteink eReader Community](https://discord.gg/2cdKUbWRE8)
+
 ![Sample](images/sample.png)
 
 ## Hardware
 
-- **Device**: Xteink X4
+- **Device**: [Xteink X4](https://www.xteink.com/products/xteink-x4)
 - **Board**: ESP32-C3 (QFN32)
-- **Display**: [4.26" E-Ink (800×480px, GDEQ0426T82, SSD1677 controller)](https://www.good-display.com/product/457.html)
+- **Flash**: 16MB (SPI), 6.5MB app0 / app1 partitions + spiffs
+- **RAM**: 400KB (327680 bytes usable with PlatformIO, no PSRAM)
+- **Display**: [4.26" E-Ink (800×480px, GDEQ0426T82, SSD1677 controller)](https://www.good-display.com/product/457.html) (220PPI)
 - **Custom SPI pins**: SCLK=8, MOSI=10, CS=21, DC=4, RST=5, BUSY=6
+- **Battery**: 650mAh
+- **Storage**: microSD card slot
 
 ### Resources
 
@@ -46,6 +54,7 @@ Before flashing custom firmware, back up the factory firmware:
 # Read entire 16MB flash
 python -m esptool --chip esp32c3 --port COM4 read_flash 0x0 0x1000000 firmware_backup.bin
 ```
+
 ```powershell
 # Read only app0 (faster)
 python -m esptool --chip esp32c3 --port COM4 read_flash 0x10000 0x640000 app0_backup.bin
@@ -105,24 +114,28 @@ The XteinkX4 uses **resistor ladder networks** connected to two ADC pins for but
 ### Button ADC Values
 
 **GPIO1 (4 buttons)**:
+
 - Back: ~3470
 - Confirm: ~2655
 - Left: ~1470
 - Right: ~3
 
 **GPIO2 (2 buttons)**:
+
 - Volume Up: ~2205
 - Volume Down: ~3
 
-**GPIO3 (Power button)**:
-- Pressed: ~3
-- This example uses a 2-second-long press for sleep and a 1.5-second-long press to wake from sleep
+### Power Button
 
-**Battery ADC**:
-- GPIO0, raw value ranges up to ~2800 when charging. ~2760 when not charging and full.
-- Voltage divider is ~2 (2 x 10K resistors), `CONV_FACTOR=1.6113` for [this library](https://github.com/pangodream/18650CL)
-- [See here](https://www.pangodream.es/esp32-getting-battery-charging-level) for details how voltage and charge level are calculated
-- `CONV_FACTOR` may need calibration depending on the device, `1.5176` working well on mine
+**GPIO3**:
+
+- Pressed: LOW
+- This example uses a 1-second-long press for sleep and a 1-second-long press to wake from sleep
+
+### Battery Voltage
+
+- GPIO0 is connected to the battery via a voltage divider (2x10K resistors), reading 1/2 of the actual voltage
+- UART0_RXD/GPIO20 can be used to detect USB connection (charging or not)
 
 ### Implementation Notes
 
