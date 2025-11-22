@@ -3,9 +3,15 @@
 #include <Fonts/FreeMonoBold12pt7b.h>
 #include <GxEPD2_BW.h>
 #include <SPI.h>
-#include "image.h"
-#include "Pangodream_18650_CL.h"
+#include <FS.h>
+#include <SD.h>
+#include <string.h>
 
+#include "image.h"
+#include "BatteryMonitor.h"
+
+
+#define SPI_FQ 40000000
 // Display SPI pins (custom pins for XteinkX4, not hardware SPI defaults)
 #define EPD_SCLK 8  // SPI Clock
 #define EPD_MOSI 10 // SPI MOSI (Master Out Slave In)
@@ -20,12 +26,14 @@
 #define BTN_GPIO3 3 // Power button (digital)
 
 #define UART0_RXD 20 // Used for USB connection detection
-
 #define BAT_GPIO0 0 // Battery voltage
-#define READS 10
-#define CONV_FACTOR 1.5176
 
-Pangodream_18650_CL BL(BAT_GPIO0, CONV_FACTOR, READS);
+#define SD_SPI_CS   12
+#define SD_SPI_MISO 7
+
+static bool g_sdReady = false;
+
+static BatteryMonitor g_battery(BAT_GPIO0);
 
 static int rawBat = 0;
 
@@ -44,7 +52,7 @@ volatile DisplayCommand displayCommand = DISPLAY_NONE;
 // GxEPD2 display - Using GxEPD2_426_GDEQ0426T82
 // Note: XteinkX4 has 4.26" 800x480 display
 GxEPD2_BW<GxEPD2_426_GDEQ0426T82, GxEPD2_426_GDEQ0426T82::HEIGHT> display(
-    GxEPD2_426_GDEQ0426T82(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
+  GxEPD2_426_GDEQ0426T82(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
 
 // FreeRTOS task for non-blocking display updates
 TaskHandle_t displayTaskHandle = NULL;
@@ -77,6 +85,7 @@ volatile Button currentPressedButton = NONE;
 // Power button timing
 const unsigned long POWER_BUTTON_WAKEUP_MS = 1000; // Time required to confirm boot from sleep
 const unsigned long POWER_BUTTON_SLEEP_MS = 1000;  // Time required to enter sleep mode
+
 
 // Get button name as string
 const char *getButtonName(Button btn)
@@ -163,11 +172,90 @@ void drawBatteryInfo()
   display.printf("Power: %s", charging ? "Charging" : "Battery");
 
   display.setCursor(40, 200);
-  display.printf("Raw: %i", rawBat);
+  display.printf("Raw: %i", g_battery.readRawMillivolts());
   display.setCursor(40, 240);
-  display.printf("Volts: %.2f V", BL.getBatteryVolts());
+  display.printf("Volts: %.2f V", g_battery.readVolts());
   display.setCursor(40, 280);
-  display.printf("Charge: %i%%", BL.getBatteryChargeLevel());
+  display.printf("Charge: %i%%", g_battery.readPercentage());
+}
+
+// Draw up to top file names from SD on the display, below battery info
+static void drawSdTopFiles()
+{
+  // Layout constants aligned with drawBatteryInfo() block
+  const int startX = 40;
+  const int startY = 350;
+  const int lineHeight = 26;
+  const int maxLines = 5;
+  const int maxChars = 30;
+
+  display.setFont(&FreeMonoBold12pt7b);
+
+  display.setCursor(20, 320);
+  display.print("Top 5 files on SD:");
+
+  auto drawTruncated = [&](int lineIdx, const char *text)
+  {
+    // Render a single line, truncating with ellipsis if needed
+    String s(text ? text : "");
+    if ((int) s.length() > maxChars)
+    {
+      s.remove(maxChars - 1);
+      s += "…";
+    }
+    display.setCursor(startX, startY + lineIdx * lineHeight);
+    display.print(s);
+  };
+
+  // Ensure SD is initialized using global flag; try to init if needed
+  if (!g_sdReady)
+  {
+    if (SD.begin(SD_SPI_CS, SPI, SPI_FQ))
+    {
+      g_sdReady = true;
+    }
+  }
+
+  if (!g_sdReady)
+  {
+    drawTruncated(0, "No card");
+    return;
+  }
+
+  File root = SD.open("/");
+  if (!root || !root.isDirectory())
+  {
+    drawTruncated(0, "No card");
+    if (root) root.close();
+    return;
+  }
+
+  int count = 0;
+  for (File f = root.openNextFile(); f && count < maxLines; f = root.openNextFile())
+  {
+    if (!f.isDirectory())
+    {
+      const char *name = f.name();
+      // Ensure only name + extension, no leading path
+      const char *basename = name;
+      if (basename)
+      {
+        const char *slash = strrchr(basename, '/');
+        if (slash && *(slash + 1))
+          basename = slash + 1;
+      }
+      drawTruncated(count, basename ? basename : "");
+      count++;
+    }
+    f.close();
+  }
+
+  if (count == 0)
+  {
+    drawTruncated(0, "Empty");
+  }
+
+  root.close();
 }
 
 // Display update task running on separate core
@@ -201,6 +289,8 @@ void displayUpdateTask(void *parameter)
 
           // Draw battery information
           drawBatteryInfo();
+          // Draw top 3 SD files below the battery block
+          drawSdTopFiles();
 
           // Draw image at bottom right
           int16_t imgWidth = 263;
@@ -214,7 +304,7 @@ void displayUpdateTask(void *parameter)
       else if (cmd == DISPLAY_TEXT)
       {
         // Use partial refresh for text updates
-        display.setPartialWindow(0, 75, display.width(), 300);
+        display.setPartialWindow(0, 75, display.width(), 225);
         display.firstPage();
         do
         {
@@ -321,6 +411,13 @@ void setup()
     delay(10);
   }
 
+  if (Serial)
+  {
+    // delay for monitor to start reading
+    delay(1000);
+  }
+
+
   Serial.println("\n=================================");
   Serial.println("  xteink x4 sample");
   Serial.println("=================================");
@@ -333,16 +430,28 @@ void setup()
   pinMode(BTN_GPIO3, INPUT_PULLUP); // Power button
 
   // Initialize SPI with custom pins
-  SPI.begin(EPD_SCLK, -1, EPD_MOSI, EPD_CS);
-
+  SPI.begin(EPD_SCLK,SD_SPI_MISO, EPD_MOSI, EPD_CS);
   // Initialize display
-  display.init(115200);
+  SPISettings spi_settings(SPI_FQ, MSBFIRST, SPI_MODE0);
+  display.init(115200, true, 2, false, SPI, spi_settings);
+
+  // SD Card Initialization
+  if (!SD.begin(SD_SPI_CS, SPI, SPI_FQ))
+  {
+    Serial.print("\n SD card not detected\n");
+  }
+  else
+  {
+    Serial.print("\n SD card detected\n");
+    g_sdReady = true;
+  }
 
   // Setup display properties
   display.setRotation(3); // 270 degrees
   display.setTextColor(GxEPD_BLACK);
 
   Serial.println("Display initialized");
+
 
   // Draw initial welcome screen
   currentPressedButton = NONE;
@@ -362,6 +471,39 @@ void setup()
   Serial.println("Setup complete!\n");
 }
 
+#ifdef DEBUG_IO
+void debugIO()
+{
+  // Log raw analog levels of BTN1 and BTN2 not more often than once per second
+  rawBat = analogRead(BAT_GPIO0);
+  int rawBtn1 = analogRead(BTN_GPIO1);
+  int rawBtn2 = analogRead(BTN_GPIO2);
+  int rawBtn3 = digitalRead(BTN_GPIO3);
+  Serial.print("ADC BTN1=");
+  Serial.print(rawBtn1);
+  Serial.print("    BTN2=");
+  Serial.print(rawBtn2);
+  Serial.print("    BTN3=");
+  Serial.print(rawBtn3);
+  Serial.println("");
+
+  // log battery info
+  Serial.printf("== Battery (charging: %s) ==\n", isCharging() ? "yes" : "no");
+  Serial.print("Value from pin (raw/calibrated): ");
+  Serial.print(rawBat);
+  Serial.print(" / ");
+  Serial.println(BatteryMonitor::millivoltsFromRawAdc(rawBat));
+  Serial.print("Volts: ");
+  Serial.println(g_battery.readVolts());
+  Serial.print("Charge level: ");
+  Serial.println(g_battery.readPercentage());
+  Serial.println("");
+
+  // SD card
+}
+#endif
+
+
 void loop()
 {
   Button currentButton = GetPressedButton();
@@ -374,6 +516,10 @@ void loop()
 
     currentPressedButton = currentButton;
     displayCommand = DISPLAY_TEXT;
+
+#ifdef DEBUG_IO
+    debugIO();
+#endif
 
     if (currentButton == POWER)
     {
@@ -391,36 +537,5 @@ void loop()
 
   lastButton = currentButton;
 
-#ifdef DEBUG_IO
-  // Log raw analog levels of BTN1 and BTN2 not more often than once per second
-  static unsigned long lastLogMs = 0;
-  unsigned long now = millis();
-  if (now - lastLogMs >= 1000)
-  {
-    rawBat = analogRead(BAT_GPIO0);
-    int rawBtn1 = analogRead(BTN_GPIO1);
-    int rawBtn2 = analogRead(BTN_GPIO2);
-    int rawBtn3 = digitalRead(BTN_GPIO3);
-    Serial.print("ADC BTN1=");
-    Serial.print(rawBtn1);
-    Serial.print("    BTN2=");
-    Serial.print(rawBtn2);
-    Serial.print("    BTN3=");
-    Serial.print(rawBtn3);
-
-    Serial.println("");
-
-    Serial.print("Value from pin: ");
-    Serial.println(rawBat);
-    Serial.print("Average value from pin: ");
-    Serial.println(BL.pinRead());
-    Serial.print("Volts: ");
-    Serial.println(BL.getBatteryVolts());
-    Serial.print("Charge level: ");
-    Serial.println(BL.getBatteryChargeLevel());
-    Serial.println("");
-    lastLogMs = now;
-  }
   delay(50);
-#endif
 }
