@@ -3,8 +3,10 @@
 
 #include <Arduino.h>
 
-class BatteryMonitor
-{
+#define UART0_RXD 20 // Used for USB connection detection
+#define BAT_GPIO0 0 // Battery voltage
+
+class BatteryMonitor {
 public:
   // Optional divider multiplier parameter defaults to 2.0
   explicit BatteryMonitor(uint8_t adcPin, float dividerMultiplier = 2.0f);
@@ -26,6 +28,9 @@ public:
 
   // Calibrate a raw ADC reading and return millivolts
   static uint16_t millivoltsFromRawAdc(uint16_t adc_raw);
+
+  // Check if the battery is currently being charged
+  bool isCharging() const;
 
 private:
   uint8_t _adcPin;

@@ -9,7 +9,11 @@
 
 #include "image.h"
 #include "BatteryMonitor.h"
-
+#include "FileSystem.h"
+#include "UI/ui.h"
+#include "UI/Elements/label.h"
+#include "UI/Elements/statusBar.h"
+#include "UI/Elements/fileBrowser.h"
 
 #define SPI_FQ 40000000
 // Display SPI pins (custom pins for XteinkX4, not hardware SPI defaults)
@@ -20,22 +24,15 @@
 #define EPD_RST 5   // Reset
 #define EPD_BUSY 6  // Busy
 
-// Button pins
-#define BTN_GPIO1 1 // 4 buttons on ADC resistor ladder: Back, Confirm, Left, Right
-#define BTN_GPIO2 2 // 2 buttons on ADC resistor ladder: Volume Up, Volume Down
-#define BTN_GPIO3 3 // Power button (digital)
-
-#define UART0_RXD 20 // Used for USB connection detection
-#define BAT_GPIO0 0 // Battery voltage
-
 #define SD_SPI_CS   12
 #define SD_SPI_MISO 7
-
-static bool g_sdReady = false;
 
 static BatteryMonitor g_battery(BAT_GPIO0);
 
 static int rawBat = 0;
+
+static Button lastButton = NONE;
+volatile Button currentPressedButton = NONE;
 
 // Display command enum
 enum DisplayCommand
@@ -56,207 +53,6 @@ GxEPD2_BW<GxEPD2_426_GDEQ0426T82, GxEPD2_426_GDEQ0426T82::HEIGHT> display(
 
 // FreeRTOS task for non-blocking display updates
 TaskHandle_t displayTaskHandle = NULL;
-
-// Button ADC thresholds
-const int BTN_THRESHOLD = 100; // Threshold tolerance
-const int BTN_RIGHT_VAL = 3;
-const int BTN_LEFT_VAL = 1470;
-const int BTN_CONFIRM_VAL = 2655;
-const int BTN_BACK_VAL = 3470;
-const int BTN_VOLUME_DOWN_VAL = 3;
-const int BTN_VOLUME_UP_VAL = 2205;
-
-// Button enum
-enum Button
-{
-  NONE = 0,
-  RIGHT,
-  LEFT,
-  CONFIRM,
-  BACK,
-  VOLUME_UP,
-  VOLUME_DOWN,
-  POWER
-};
-
-static Button lastButton = NONE;
-volatile Button currentPressedButton = NONE;
-
-// Power button timing
-const unsigned long POWER_BUTTON_WAKEUP_MS = 1000; // Time required to confirm boot from sleep
-const unsigned long POWER_BUTTON_SLEEP_MS = 1000;  // Time required to enter sleep mode
-
-
-// Get button name as string
-const char *getButtonName(Button btn)
-{
-  switch (btn)
-  {
-  case NONE:
-    return "Press any button";
-  case RIGHT:
-    return "RIGHT pressed!";
-  case LEFT:
-    return "LEFT pressed!";
-  case CONFIRM:
-    return "CONFIRM pressed!";
-  case BACK:
-    return "BACK pressed!";
-  case VOLUME_UP:
-    return "VOLUME UP pressed!";
-  case VOLUME_DOWN:
-    return "VOLUME DOWN pressed!";
-  case POWER:
-    return "POWER pressed!";
-  default:
-    return "";
-  }
-}
-
-// Get currently pressed button by reading ADC values (and digital for power button)
-Button GetPressedButton()
-{
-  int btn1 = analogRead(BTN_GPIO1);
-  int btn2 = analogRead(BTN_GPIO2);
-
-  // Check BTN_GPIO3 (Power button) - digital read
-  if (digitalRead(BTN_GPIO3) == LOW)
-  {
-    return POWER;
-  }
-  // Check BTN_GPIO1 (4 buttons on resistor ladder)
-  if (btn1 < BTN_RIGHT_VAL + BTN_THRESHOLD)
-  {
-    return RIGHT;
-  }
-  else if (btn1 < BTN_LEFT_VAL + BTN_THRESHOLD)
-  {
-    return LEFT;
-  }
-  else if (btn1 < BTN_CONFIRM_VAL + BTN_THRESHOLD)
-  {
-    return CONFIRM;
-  }
-  else if (btn1 < BTN_BACK_VAL + BTN_THRESHOLD)
-  {
-    return BACK;
-  }
-
-  // Check BTN_GPIO2 (2 buttons on resistor ladder)
-  if (btn2 < BTN_VOLUME_DOWN_VAL + BTN_THRESHOLD)
-  {
-    return VOLUME_DOWN;
-  }
-  else if (btn2 < BTN_VOLUME_UP_VAL + BTN_THRESHOLD)
-  {
-    return VOLUME_UP;
-  }
-
-  return NONE;
-}
-
-// Check if charging
-bool isCharging()
-{
-  // U0RXD/GPIO20 reads HIGH when USB is connected
-  return digitalRead(UART0_RXD) == HIGH;
-}
-
-// Draw battery information on display
-void drawBatteryInfo()
-{
-  display.setFont(&FreeMonoBold12pt7b);
-  display.setCursor(20, 160);
-
-  bool charging = isCharging();
-  display.printf("Power: %s", charging ? "Charging" : "Battery");
-
-  display.setCursor(40, 200);
-  display.printf("Raw: %i", g_battery.readRawMillivolts());
-  display.setCursor(40, 240);
-  display.printf("Volts: %.2f V", g_battery.readVolts());
-  display.setCursor(40, 280);
-  display.printf("Charge: %i%%", g_battery.readPercentage());
-}
-
-// Draw up to top file names from SD on the display, below battery info
-static void drawSdTopFiles()
-{
-  // Layout constants aligned with drawBatteryInfo() block
-  const int startX = 40;
-  const int startY = 350;
-  const int lineHeight = 26;
-  const int maxLines = 5;
-  const int maxChars = 30;
-
-  display.setFont(&FreeMonoBold12pt7b);
-
-  display.setCursor(20, 320);
-  display.print("Top 5 files on SD:");
-
-  auto drawTruncated = [&](int lineIdx, const char *text)
-  {
-    // Render a single line, truncating with ellipsis if needed
-    String s(text ? text : "");
-    if ((int) s.length() > maxChars)
-    {
-      s.remove(maxChars - 1);
-      s += "…";
-    }
-    display.setCursor(startX, startY + lineIdx * lineHeight);
-    display.print(s);
-  };
-
-  // Ensure SD is initialized using global flag; try to init if needed
-  if (!g_sdReady)
-  {
-    if (SD.begin(SD_SPI_CS, SPI, SPI_FQ))
-    {
-      g_sdReady = true;
-    }
-  }
-
-  if (!g_sdReady)
-  {
-    drawTruncated(0, "No card");
-    return;
-  }
-
-  File root = SD.open("/");
-  if (!root || !root.isDirectory())
-  {
-    drawTruncated(0, "No card");
-    if (root) root.close();
-    return;
-  }
-
-  int count = 0;
-  for (File f = root.openNextFile(); f && count < maxLines; f = root.openNextFile())
-  {
-    if (!f.isDirectory())
-    {
-      const char *name = f.name();
-      // Ensure only name + extension, no leading path
-      const char *basename = name;
-      if (basename)
-      {
-        const char *slash = strrchr(basename, '/');
-        if (slash && *(slash + 1))
-          basename = slash + 1;
-      }
-      drawTruncated(count, basename ? basename : "");
-      count++;
-    }
-    f.close();
-  }
-
-  if (count == 0)
-  {
-    drawTruncated(0, "Empty");
-  }
-
-  root.close();
-}
 
 // Display update task running on separate core
 void displayUpdateTask(void *parameter)
@@ -288,9 +84,9 @@ void displayUpdateTask(void *parameter)
           display.print(getButtonName(currentPressedButton));
 
           // Draw battery information
-          drawBatteryInfo();
+          // drawBatteryInfo();
           // Draw top 3 SD files below the battery block
-          drawSdTopFiles();
+          // drawSdTopFiles();
 
           // Draw image at bottom right
           int16_t imgWidth = 263;
@@ -312,7 +108,7 @@ void displayUpdateTask(void *parameter)
           display.setFont(&FreeMonoBold12pt7b);
           display.setCursor(20, 100);
           display.print(getButtonName(currentPressedButton));
-          drawBatteryInfo();
+          // drawBatteryInfo();
         } while (display.nextPage());
       }
       else if (cmd == DISPLAY_BATTERY)
@@ -323,7 +119,7 @@ void displayUpdateTask(void *parameter)
         do
         {
           display.fillScreen(GxEPD_WHITE);
-          drawBatteryInfo();
+          // drawBatteryInfo();
         } while (display.nextPage());
       }
       else if (cmd == DISPLAY_SLEEP)
@@ -393,6 +189,23 @@ void enterDeepSleep()
   esp_deep_sleep_start();
 }
 
+FileSystem fileSys;
+UIStatusBar statusBar(&g_battery, UI_SAFE_LEFT, UI_SAFE_TOP, UI_SAFE_WIDTH, UI_STATUSBAR_HEIGHT);
+// UILabel labelElement("", &FreeMonoBold12pt7b, UI_SAFE_LEFT + UI_MARGIN_M, 120);
+UIFileBrowser fileBrowser(UI_SAFE_LEFT, UI_SAFE_TOP + UI_STATUSBAR_HEIGHT, UI_SAFE_WIDTH, UI_SAFE_HEIGHT - UI_STATUSBAR_HEIGHT);
+
+void refreshUI() {
+    uiClear();
+    uiAddElement(statusBar.getElement());
+    // uiAddElement(labelElement.getElement());
+    // labelElement.setText(label);
+
+    auto files = fileSys.readFolder("/");
+    fileBrowser.setFiles(files);
+    uiAddElement(fileBrowser.getElement());
+    uiRenderFull();
+}
+
 void setup()
 {
   // Check if boot was triggered by the Power Button (Deep Sleep Wakeup)
@@ -406,13 +219,11 @@ void setup()
 
   // Wait for serial monitor
   unsigned long start = millis();
-  while (!Serial && (millis() - start) < 3000)
-  {
+  while (!Serial && (millis() - start) < 3000) {
     delay(10);
   }
 
-  if (Serial)
-  {
+  if (Serial) {
     // delay for monitor to start reading
     delay(1000);
   }
@@ -436,36 +247,30 @@ void setup()
   display.init(115200, true, 2, false, SPI, spi_settings);
 
   // SD Card Initialization
-  if (!SD.begin(SD_SPI_CS, SPI, SPI_FQ))
-  {
-    Serial.print("\n SD card not detected\n");
-  }
-  else
-  {
-    Serial.print("\n SD card detected\n");
-    g_sdReady = true;
-  }
+  fileSys.begin();
 
   // Setup display properties
   display.setRotation(3); // 270 degrees
-  display.setTextColor(GxEPD_BLACK);
-
+  display.setTextColor(GxEPD_BLACK);  
   Serial.println("Display initialized");
-
+  
+  // Initialize UI
+  uiInit(&display);
+  refreshUI();
 
   // Draw initial welcome screen
   currentPressedButton = NONE;
   displayCommand = DISPLAY_INITIAL;
 
   // Create display update task on core 0 (main loop runs on core 1)
-  xTaskCreatePinnedToCore(displayUpdateTask,  // Task function
-                          "DisplayUpdate",    // Task name
-                          4096,               // Stack size
-                          NULL,               // Parameters
-                          1,                  // Priority
-                          &displayTaskHandle, // Task handle
-                          0                   // Core 0
-  );
+  // xTaskCreatePinnedToCore(displayUpdateTask,  // Task function
+  //                         "DisplayUpdate",    // Task name
+  //                         4096,               // Stack size
+  //                         NULL,               // Parameters
+  //                         1,                  // Priority
+  //                         &displayTaskHandle, // Task handle
+  //                         0                   // Core 0
+  // );
 
   Serial.println("Display task created");
   Serial.println("Setup complete!\n");
@@ -488,7 +293,7 @@ void debugIO()
   Serial.println("");
 
   // log battery info
-  Serial.printf("== Battery (charging: %s) ==\n", isCharging() ? "yes" : "no");
+  Serial.printf("== Battery (charging: %s) ==\n", g_battery.isCharging() ? "yes" : "no");
   Serial.print("Value from pin (raw/calibrated): ");
   Serial.print(rawBat);
   Serial.print(" / ");
@@ -511,9 +316,9 @@ void loop()
   // Detect button press (transition from NONE to a button)
   if (currentButton != NONE && lastButton == NONE)
   {
+    const char *buttonName = getButtonName(currentButton);
     Serial.print("Button: ");
-    Serial.println(getButtonName(currentButton));
-
+    Serial.println(buttonName);
     currentPressedButton = currentButton;
     displayCommand = DISPLAY_TEXT;
 

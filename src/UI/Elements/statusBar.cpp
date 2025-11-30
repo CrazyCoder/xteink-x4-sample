@@ -1,0 +1,85 @@
+#include <Fonts/FreeMonoBold12pt7b.h>
+#include "statusBar.h"
+#include "../ui.h"
+
+UIStatusBar::UIStatusBar(const BatteryMonitor* batteryMonitor,
+                         int16_t x,
+                         int16_t y,
+                         int16_t width,
+                         int16_t height)
+    : batteryMonitor_(batteryMonitor),
+      x_(x),
+      y_(y),
+      w_(width),
+      h_(height)
+{
+}
+
+static void drawBatteryIcon(int16_t x, int16_t y, uint8_t pct)
+{
+    // icon size
+    const int16_t w = UI_STATUSBAR_BATTERYICON_W;
+    const int16_t h = UI_STATUSBAR_BATTERYICON_H;
+    const int16_t border = 2;
+
+    // terminal
+    UI_DISPLAY.drawRect(x + w, y + h/3, 3, h/3, GxEPD_BLACK);
+
+    // outer body
+    UI_DISPLAY.drawRect(x, y, w, h, GxEPD_BLACK);
+
+    // inner fill area
+    int16_t innerW = w - border * 2;
+    int16_t innerH = h - border * 2;
+    int16_t fillX = x + border;
+    int16_t fillY = y + border;
+
+    // compute fill width
+    int16_t fillW = (innerW * pct) / 100;
+    if (fillW < 0) {
+        fillW = 0;
+    }
+    if (fillW > innerW) { 
+        fillW = innerW;
+    }
+
+    // draw fill
+    if (fillW > 0) {
+        UI_DISPLAY.fillRect(fillX, fillY, fillW, innerH, GxEPD_BLACK);
+    }
+}
+
+void UIStatusBar::draw(UIElement*) {
+    // background optional — e-ink usually stays white
+    // UI_DISPLAY.fillRect(x_, y_, w_, h_, GxEPD_WHITE);
+    UI_DISPLAY.setFont(&FreeMonoBold12pt7b);
+
+    int16_t iconX = x_ + UI_MARGIN_S;
+    int16_t iconY = y_ + (UI_STATUSBAR_HEIGHT - UI_STATUSBAR_BATTERYICON_H) / 2;
+    if (batteryMonitor_) {
+        uint8_t pct = batteryMonitor_->readPercentage();
+        drawBatteryIcon(iconX, iconY, pct);
+        UI_DISPLAY.setCursor(x_ + UI_MARGIN_S + UI_STATUSBAR_BATTERYICON_W + UI_MARGIN_S, y_ + (h_ / 2) + 6);
+        UI_DISPLAY.print(pct);
+        UI_DISPLAY.print("%");
+        if (batteryMonitor_->isCharging()) {
+            UI_DISPLAY.print(" (Charging)");
+        }
+    } else {
+        drawBatteryIcon(iconX, iconY, 0);
+        UI_DISPLAY.setCursor(x_ + UI_MARGIN_S + UI_STATUSBAR_BATTERYICON_W + UI_MARGIN_S, y_ + (h_ / 2) + 6);
+        UI_DISPLAY.print("Battery: ?");
+    }
+
+    // divider line below status bar
+    UI_DISPLAY.drawFastHLine(x_, y_ + h_ - 2, w_, GxEPD_BLACK);
+}
+
+bool UIStatusBar::onEvent(UIElement*, Button) {
+    // Status bar doesn’t consume input for now
+    return false;
+}
+
+UIElement UIStatusBar::getElement() {
+    return UIWidget::getElement(x_, y_, w_, h_);
+}
