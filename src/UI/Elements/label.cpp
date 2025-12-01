@@ -1,7 +1,7 @@
 #include "label.h"
 #include "../ui.h"
 
-UILabel::UILabel(const char* text, const GFXfont* font, int16_t x, int16_t y) : text_(text), font_(font), x_(x), y_(y) {
+UILabel::UILabel(const char* text, int16_t x, int16_t y) : text_(text), x_(x), y_(y) {
 }
 
 void UILabel::setText(const char* t) {
@@ -9,9 +9,7 @@ void UILabel::setText(const char* t) {
 }
 
 void UILabel::draw(UIElement*) {
-    if (font_) {
-        UI_DISPLAY.setFont(font_);
-    }
+    UI_DISPLAY.setFont(UI_FONT_MAIN);
     UI_DISPLAY.setCursor(x_, y_);
     UI_DISPLAY.print(text_);
 }

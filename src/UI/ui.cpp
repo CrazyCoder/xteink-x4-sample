@@ -1,5 +1,4 @@
 #include "ui.h"
-#include <GxEPD2_BW.h>
 
 // A generic pointer to whichever display class was instantiated
 static void* g_disp_void = nullptr;
@@ -42,9 +41,16 @@ static bool isFocusable(const UIElement& e) {
 }
 
 static void clampFocus() {
-    if (g_count == 0) { g_focusIndex = -1; return; }
-    if (g_focusIndex < 0) g_focusIndex = 0;
-    if (g_focusIndex >= g_count) g_focusIndex = g_count - 1;
+    if (g_count == 0) { 
+        g_focusIndex = -1; 
+        return; 
+    }
+    if (g_focusIndex < 0) {
+        g_focusIndex = 0;
+    }
+    if (g_focusIndex >= g_count) {
+        g_focusIndex = g_count - 1;
+    }
 }
 
 // --------------------------------------------------
@@ -55,28 +61,35 @@ void uiClear() {
     g_focusIndex = -1;
 }
 
-int uiAddElement(const UIElement& e) {
-    if (g_count >= UI_MAX_ELEMENTS) return -1;
+int uiAddElement(const UIElement& e, bool focus) {
+    if (g_count >= UI_MAX_ELEMENTS) {
+        return -1;
+    }
 
     g_elements[g_count] = e;
 
-    if (g_focusIndex == -1 && isFocusable(e))
+    if (focus || (g_focusIndex == -1 && isFocusable(e))) {
         g_focusIndex = g_count;
+    }
 
     return g_count++;
 }
 
 void uiRenderFull() {
-    if (!g_disp_void) return;
+    if (!g_disp_void) {
+        return;
+    }
 
     UI_DISPLAY.setFullWindow();
     UI_DISPLAY.firstPage();
     do {
         UI_DISPLAY.fillScreen(GxEPD_WHITE);
 
-        for (int i = 0; i < g_count; i++)
-            if (g_elements[i].draw)
+        for (int i = 0; i < g_count; i++) {
+            if (g_elements[i].draw) {
                 g_elements[i].draw(&g_elements[i]);
+            }
+        }
 
     } while (UI_DISPLAY.nextPage());
 }
@@ -96,24 +109,31 @@ void uiRenderPartial(int16_t x, int16_t y, int16_t w, int16_t h) {
                 !(e.x + e.w < x || e.x > x + w ||
                   e.y + e.h < y || e.y > y + h);
 
-            if (intersect && e.draw)
+            if (intersect && e.draw) {
                 e.draw(&e);
+            }
         }
 
     } while (UI_DISPLAY.nextPage());
 }
 
 bool uiHandleButton(Button b) {
-    if (g_focusIndex < 0 || g_focusIndex >= g_count)
+    if (g_focusIndex < 0 || g_focusIndex >= g_count) {
         return false;
+    }
 
     UIElement& e = g_elements[g_focusIndex];
-
-    return e.onEvent ? e.onEvent(&e, b) : false;
+    bool mustRedraw = e.onEvent ? e.onEvent(&e, b) : false;
+    if (mustRedraw) {
+        uiRenderPartial(e.x, e.y, e.w, e.h);
+    }
+    return mustRedraw;
 }
 
 void uiFocusNext() {
-    if (g_count == 0) return;
+    if (g_count == 0) {
+        return;
+    }
     int start = g_focusIndex;
     int i = g_focusIndex;
 
@@ -123,12 +143,16 @@ void uiFocusNext() {
             g_focusIndex = i;
             return;
         }
-        if (i == start) return;
+        if (i == start) {
+            return;
+        }
     }
 }
 
 void uiFocusPrev() {
-    if (g_count == 0) return;
+    if (g_count == 0) {
+        return;
+    }
     int start = g_focusIndex;
     int i = g_focusIndex;
 
@@ -138,7 +162,9 @@ void uiFocusPrev() {
             g_focusIndex = i;
             return;
         }
-        if (i == start) return;
+        if (i == start) {
+            return;
+        }
     }
 }
 

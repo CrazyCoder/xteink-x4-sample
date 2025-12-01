@@ -4,7 +4,7 @@
 
 class UILabel : public UIWidget {
 public:
-    UILabel(const char* text, const GFXfont* font, int16_t x, int16_t y);
+    UILabel(const char* text, int16_t x, int16_t y);
 
     void setText(const char* t);
 
@@ -15,6 +15,5 @@ public:
 
 private:
     const char* text_;
-    const GFXfont* font_;
     int16_t x_, y_;
 };

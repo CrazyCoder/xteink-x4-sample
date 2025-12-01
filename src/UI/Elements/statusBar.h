@@ -2,9 +2,10 @@
 #include "widget.h"
 #include "../../BatteryMonitor.h"
 
-#define UI_STATUSBAR_HEIGHT 40
-#define UI_STATUSBAR_BATTERYICON_W 36
-#define UI_STATUSBAR_BATTERYICON_H 20
+#define UI_STATUSBAR_HEIGHT         36
+#define UI_STATUSBAR_BATTERYICON_W  36
+#define UI_STATUSBAR_BATTERYICON_H  20
+#define UI_STATUSBAR_SHOW_PCT       false
 
 class UIStatusBar : public UIWidget {
 public:

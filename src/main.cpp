@@ -1,7 +1,4 @@
 #include <Arduino.h>
-#include <Fonts/FreeMonoBold18pt7b.h>
-#include <Fonts/FreeMonoBold12pt7b.h>
-#include <GxEPD2_BW.h>
 #include <SPI.h>
 #include <FS.h>
 #include <SD.h>
@@ -74,12 +71,12 @@ void displayUpdateTask(void *parameter)
           display.fillScreen(GxEPD_WHITE);
 
           // Header font
-          display.setFont(&FreeMonoBold18pt7b);
+          display.setFont(UI_FONT_MAIN);
           display.setCursor(20, 50);
           display.print("Xteink X4 Sample");
 
           // Button text with smaller font
-          display.setFont(&FreeMonoBold12pt7b);
+          display.setFont(UI_FONT_MAIN);
           display.setCursor(20, 100);
           display.print(getButtonName(currentPressedButton));
 
@@ -105,7 +102,7 @@ void displayUpdateTask(void *parameter)
         do
         {
           display.fillScreen(GxEPD_WHITE);
-          display.setFont(&FreeMonoBold12pt7b);
+          display.setFont(UI_FONT_MAIN);
           display.setCursor(20, 100);
           display.print(getButtonName(currentPressedButton));
           // drawBatteryInfo();
@@ -131,7 +128,7 @@ void displayUpdateTask(void *parameter)
         {
           display.fillScreen(GxEPD_WHITE);
           // Header font
-          display.setFont(&FreeMonoBold18pt7b);
+          display.setFont(UI_FONT_MAIN);
           display.setCursor(120, 380);
           display.print("Sleeping...");
         } while (display.nextPage());
@@ -202,7 +199,7 @@ void refreshUI() {
 
     auto files = fileSys.readFolder("/");
     fileBrowser.setFiles(files);
-    uiAddElement(fileBrowser.getElement());
+    uiAddElement(fileBrowser.getElement(), true);
     uiRenderFull();
 }
 
@@ -309,29 +306,29 @@ void debugIO()
 #endif
 
 
-void loop()
-{
+void loop() {
   Button currentButton = GetPressedButton();
 
   // Detect button press (transition from NONE to a button)
-  if (currentButton != NONE && lastButton == NONE)
-  {
+  if (currentButton != NONE && lastButton == NONE) {
     const char *buttonName = getButtonName(currentButton);
     Serial.print("Button: ");
     Serial.println(buttonName);
     currentPressedButton = currentButton;
     displayCommand = DISPLAY_TEXT;
 
-#ifdef DEBUG_IO
-    debugIO();
-#endif
+// #ifdef DEBUG_IO
+//     debugIO();
+// #endif
 
-    if (currentButton == POWER)
-    {
+    uiHandleButton(currentPressedButton);
+
+    if (currentButton == POWER) {
       unsigned long startTime = millis();
       // Wait for button release
-      while (digitalRead(BTN_GPIO3) == LOW)
+      while (digitalRead(BTN_GPIO3) == LOW) {
         delay(50);
+      }
 
       unsigned long currentTime = millis();
       // Power button long pressed => go to sleep

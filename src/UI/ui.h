@@ -2,18 +2,7 @@
 #include <stdint.h>
 #include "Button.h"
 #include <GxEPD2_BW.h>
-
-// Pixels outside these coordinates don't get displayed on the X4 screen
-#define UI_SAFE_LEFT    4
-#define UI_SAFE_TOP     10
-#define UI_SAFE_RIGHT   795
-#define UI_SAFE_BOTTOM  476
-#define UI_SAFE_WIDTH   (UI_SAFE_RIGHT - UI_SAFE_LEFT)
-#define UI_SAFE_HEIGHT  (UI_SAFE_BOTTOM - UI_SAFE_TOP)
-
-// Design system values
-#define UI_MARGIN_S     8
-#define UI_MARGIN_M     16
+#include "theme.h"
 
 // Convenience macro for display type
 extern GxEPD2_BW<GxEPD2_426_GDEQ0426T82,
@@ -46,7 +35,7 @@ struct UIElement {
 
 // --- Core API ---
 void uiClear();
-int  uiAddElement(const UIElement& e);
+int  uiAddElement(const UIElement& e, bool focus = false);
 
 void uiRenderFull();
 void uiRenderPartial(int16_t x, int16_t y, int16_t w, int16_t h);

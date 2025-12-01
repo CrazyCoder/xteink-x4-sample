@@ -38,6 +38,11 @@ std::vector<FileInfo> FileSystem::readFolder(const char* path) {
 
     for (File f = dir.openNextFile(); f; f = dir.openNextFile()) {
         const char* rawName = f.name();
+        if (rawName[0] == '.') {
+            // ignore system files
+            continue;
+        }
+
         std::string name;
 
         // Strip leading path
@@ -51,6 +56,10 @@ std::vector<FileInfo> FileSystem::readFolder(const char* path) {
             name = basename;
         } else {
             name = "";
+        }
+
+        if(name == "System Volume Information" || name == "XTCache") {
+            continue;
         }
 
         entries.push_back({ name, f.isDirectory() });

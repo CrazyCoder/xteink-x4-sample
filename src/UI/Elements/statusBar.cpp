@@ -1,4 +1,3 @@
-#include <Fonts/FreeMonoBold12pt7b.h>
 #include "statusBar.h"
 #include "../ui.h"
 
@@ -50,29 +49,34 @@ static void drawBatteryIcon(int16_t x, int16_t y, uint8_t pct)
 }
 
 void UIStatusBar::draw(UIElement*) {
-    // background optional — e-ink usually stays white
-    // UI_DISPLAY.fillRect(x_, y_, w_, h_, GxEPD_WHITE);
-    UI_DISPLAY.setFont(&FreeMonoBold12pt7b);
+    UI_DISPLAY.fillRect(x_, y_, w_, h_, GxEPD_LIGHTGREY);
+    if (UI_STATUSBAR_SHOW_PCT) {
+        UI_DISPLAY.setFont(UI_FONT_SMALL);
+    }
 
-    int16_t iconX = x_ + UI_MARGIN_S;
+    int16_t iconX = x_ + w_ - UI_STATUSBAR_BATTERYICON_W - UI_MARGIN_S;
     int16_t iconY = y_ + (UI_STATUSBAR_HEIGHT - UI_STATUSBAR_BATTERYICON_H) / 2;
     if (batteryMonitor_) {
         uint8_t pct = batteryMonitor_->readPercentage();
         drawBatteryIcon(iconX, iconY, pct);
-        UI_DISPLAY.setCursor(x_ + UI_MARGIN_S + UI_STATUSBAR_BATTERYICON_W + UI_MARGIN_S, y_ + (h_ / 2) + 6);
-        UI_DISPLAY.print(pct);
-        UI_DISPLAY.print("%");
-        if (batteryMonitor_->isCharging()) {
-            UI_DISPLAY.print(" (Charging)");
+        if (UI_STATUSBAR_SHOW_PCT) {
+            UI_DISPLAY.setCursor(x_ + UI_MARGIN_S, y_ + (h_ + UI_FONT_SMALL_SIZE) / 2);
+            UI_DISPLAY.print(pct);
+            UI_DISPLAY.print("%");
+            if (batteryMonitor_->isCharging()) {
+                UI_DISPLAY.print(" (Charging)");
+            }
         }
     } else {
         drawBatteryIcon(iconX, iconY, 0);
-        UI_DISPLAY.setCursor(x_ + UI_MARGIN_S + UI_STATUSBAR_BATTERYICON_W + UI_MARGIN_S, y_ + (h_ / 2) + 6);
-        UI_DISPLAY.print("Battery: ?");
+        if (UI_STATUSBAR_SHOW_PCT) {    
+            UI_DISPLAY.setCursor(x_ + UI_MARGIN_S, y_ + (h_ + UI_FONT_SMALL_SIZE) / 2);
+            UI_DISPLAY.print("Battery: ?");
+        }
     }
 
     // divider line below status bar
-    UI_DISPLAY.drawFastHLine(x_, y_ + h_ - 2, w_, GxEPD_BLACK);
+    UI_DISPLAY.drawRect(x_, y_ + h_ -2, w_, 2, GxEPD_BLACK);
 }
 
 bool UIStatusBar::onEvent(UIElement*, Button) {
