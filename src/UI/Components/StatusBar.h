@@ -1,0 +1,23 @@
+#pragma once
+#include "Widget.h"
+#include "../../BatteryMonitor.h"
+
+#define UI_STATUSBAR_HEIGHT         36
+#define UI_STATUSBAR_BATTERYICON_W  36
+#define UI_STATUSBAR_BATTERYICON_H  20
+#define UI_STATUSBAR_SHOW_PCT       false
+
+class UIStatusBar : public UIWidget {
+public:
+    UIStatusBar(int16_t x,
+                int16_t y,
+                int16_t width,
+                int16_t height);
+
+    void draw(UIElement* e) override;
+    bool onEvent(UIElement*, Button) override;
+    UIElement getElement();
+
+private:
+    int16_t x_, y_, w_, h_;
+};
