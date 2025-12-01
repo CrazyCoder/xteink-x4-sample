@@ -7,10 +7,8 @@
 #include "image.h"
 #include "BatteryMonitor.h"
 #include "FileSystem.h"
-#include "UI/ui.h"
-#include "UI/Elements/label.h"
-#include "UI/Elements/statusBar.h"
-#include "UI/Elements/fileBrowser.h"
+#include "UI/UI.h"
+#include "UI/Views/LibraryView.h"
 
 #define SPI_FQ 40000000
 // Display SPI pins (custom pins for XteinkX4, not hardware SPI defaults)
@@ -23,8 +21,6 @@
 
 #define SD_SPI_CS   12
 #define SD_SPI_MISO 7
-
-static BatteryMonitor g_battery(BAT_GPIO0);
 
 static int rawBat = 0;
 
@@ -186,29 +182,10 @@ void enterDeepSleep()
   esp_deep_sleep_start();
 }
 
-FileSystem fileSys;
-UIStatusBar statusBar(&g_battery, UI_SAFE_LEFT, UI_SAFE_TOP, UI_SAFE_WIDTH, UI_STATUSBAR_HEIGHT);
-// UILabel labelElement("", &FreeMonoBold12pt7b, UI_SAFE_LEFT + UI_MARGIN_M, 120);
-UIFileBrowser fileBrowser(UI_SAFE_LEFT, UI_SAFE_TOP + UI_STATUSBAR_HEIGHT, UI_SAFE_WIDTH, UI_SAFE_HEIGHT - UI_STATUSBAR_HEIGHT);
-
-void refreshUI() {
-    uiClear();
-    uiAddElement(statusBar.getElement());
-    // uiAddElement(labelElement.getElement());
-    // labelElement.setText(label);
-
-    auto files = fileSys.readFolder("/");
-    fileBrowser.setFiles(files);
-    uiAddElement(fileBrowser.getElement(), true);
-    uiRenderFull();
-}
-
-void setup()
-{
+void setup() {
   // Check if boot was triggered by the Power Button (Deep Sleep Wakeup)
   // If triggered by RST pin or Battery insertion, this will be false, allowing normal boot.
-  if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO)
-  {
+  if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO) {
     verifyWakeupLongPress();
   }
 
@@ -244,7 +221,8 @@ void setup()
   display.init(115200, true, 2, false, SPI, spi_settings);
 
   // SD Card Initialization
-  fileSys.begin();
+  auto& fs = FileSystem::getInstance();
+  fs.begin();
 
   // Setup display properties
   display.setRotation(3); // 270 degrees
@@ -252,8 +230,10 @@ void setup()
   Serial.println("Display initialized");
   
   // Initialize UI
-  uiInit(&display);
-  refreshUI();
+  UI::init(&display);
+
+  LibraryView* libraryView = new LibraryView();
+  UI::setActiveView(libraryView);
 
   // Draw initial welcome screen
   currentPressedButton = NONE;
@@ -268,8 +248,8 @@ void setup()
   //                         &displayTaskHandle, // Task handle
   //                         0                   // Core 0
   // );
-
-  Serial.println("Display task created");
+  // Serial.println("Display task created");
+  
   Serial.println("Setup complete!\n");
 }
 
@@ -290,15 +270,16 @@ void debugIO()
   Serial.println("");
 
   // log battery info
-  Serial.printf("== Battery (charging: %s) ==\n", g_battery.isCharging() ? "yes" : "no");
+  auto& battery = BatteryMonitor::getInstance();
+  Serial.printf("== Battery (charging: %s) ==\n", battery.isCharging() ? "yes" : "no");
   Serial.print("Value from pin (raw/calibrated): ");
   Serial.print(rawBat);
   Serial.print(" / ");
   Serial.println(BatteryMonitor::millivoltsFromRawAdc(rawBat));
   Serial.print("Volts: ");
-  Serial.println(g_battery.readVolts());
+  Serial.println(battery.readVolts());
   Serial.print("Charge level: ");
-  Serial.println(g_battery.readPercentage());
+  Serial.println(battery.readPercentage());
   Serial.println("");
 
   // SD card
@@ -312,8 +293,8 @@ void loop() {
   // Detect button press (transition from NONE to a button)
   if (currentButton != NONE && lastButton == NONE) {
     const char *buttonName = getButtonName(currentButton);
-    Serial.print("Button: ");
-    Serial.println(buttonName);
+    // Serial.print("Button: ");
+    // Serial.println(buttonName);
     currentPressedButton = currentButton;
     displayCommand = DISPLAY_TEXT;
 
@@ -321,7 +302,7 @@ void loop() {
 //     debugIO();
 // #endif
 
-    uiHandleButton(currentPressedButton);
+    UI::handleButton(currentPressedButton);
 
     if (currentButton == POWER) {
       unsigned long startTime = millis();
@@ -332,8 +313,9 @@ void loop() {
 
       unsigned long currentTime = millis();
       // Power button long pressed => go to sleep
-      if (currentTime - startTime > POWER_BUTTON_SLEEP_MS)
+      if (currentTime - startTime > POWER_BUTTON_SLEEP_MS) {
         enterDeepSleep();
+      }
     }
   }
 

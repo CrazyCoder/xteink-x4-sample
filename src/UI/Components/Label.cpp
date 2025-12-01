@@ -1,5 +1,5 @@
-#include "label.h"
-#include "../ui.h"
+#include "Label.h"
+#include "../UI.h"
 
 UILabel::UILabel(const char* text, int16_t x, int16_t y) : text_(text), x_(x), y_(y) {
 }

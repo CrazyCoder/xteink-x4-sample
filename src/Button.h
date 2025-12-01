@@ -11,7 +11,7 @@ const int BTN_THRESHOLD = 100; // Threshold tolerance
 const int BTN_RIGHT_VAL = 3;
 const int BTN_LEFT_VAL = 1470;
 const int BTN_CONFIRM_VAL = 2655;
-const int BTN_BACK_VAL = 3470;
+const int BTN_BACK_VAL = 3570;
 const int BTN_VOLUME_DOWN_VAL = 3;
 const int BTN_VOLUME_UP_VAL = 2205;
 

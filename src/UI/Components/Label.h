@@ -1,5 +1,5 @@
 #pragma once
-#include "widget.h"
+#include "Widget.h"
 #include <GxEPD2_BW.h>
 
 class UILabel : public UIWidget {

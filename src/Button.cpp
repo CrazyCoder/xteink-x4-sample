@@ -3,41 +3,29 @@
 
 #include "Button.h"
 
-Button GetPressedButton()
-{
+Button GetPressedButton() {
     int btn1 = analogRead(BTN_GPIO1);
     int btn2 = analogRead(BTN_GPIO2);
 
     // Check BTN_GPIO3 (Power button) - digital read
-    if (digitalRead(BTN_GPIO3) == LOW)
-    {
+    if (digitalRead(BTN_GPIO3) == LOW) {
         return POWER;
     }
     // Check BTN_GPIO1 (4 buttons on resistor ladder)
-    if (btn1 < BTN_RIGHT_VAL + BTN_THRESHOLD)
-    {
+    if (btn1 < BTN_RIGHT_VAL + BTN_THRESHOLD) {
         return RIGHT;
-    }
-    else if (btn1 < BTN_LEFT_VAL + BTN_THRESHOLD)
-    {
+    } else if (btn1 < BTN_LEFT_VAL + BTN_THRESHOLD) {
         return LEFT;
-    }
-    else if (btn1 < BTN_CONFIRM_VAL + BTN_THRESHOLD)
-    {
+    } else if (btn1 < BTN_CONFIRM_VAL + BTN_THRESHOLD) {
         return CONFIRM;
-    }
-    else if (btn1 < BTN_BACK_VAL + BTN_THRESHOLD)
-    {
+    } else if (btn1 < BTN_BACK_VAL + BTN_THRESHOLD) {
         return BACK;
     }
 
     // Check BTN_GPIO2 (2 buttons on resistor ladder)
-    if (btn2 < BTN_VOLUME_DOWN_VAL + BTN_THRESHOLD)
-    {
+    if (btn2 < BTN_VOLUME_DOWN_VAL + BTN_THRESHOLD) {
         return VOLUME_DOWN;
-    }
-    else if (btn2 < BTN_VOLUME_UP_VAL + BTN_THRESHOLD)
-    {
+    } else if (btn2 < BTN_VOLUME_UP_VAL + BTN_THRESHOLD) {
         return VOLUME_UP;
     }
 
@@ -45,10 +33,8 @@ Button GetPressedButton()
 }
 
 // Get button name as string
-const char *getButtonName(Button btn)
-{
-  switch (btn)
-  {
+const char *getButtonName(Button btn) {
+  switch (btn) {
   case NONE:
     return "Press any button";
   case RIGHT:

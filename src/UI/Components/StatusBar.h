@@ -1,5 +1,5 @@
 #pragma once
-#include "widget.h"
+#include "Widget.h"
 #include "../../BatteryMonitor.h"
 
 #define UI_STATUSBAR_HEIGHT         36
@@ -9,8 +9,7 @@
 
 class UIStatusBar : public UIWidget {
 public:
-    UIStatusBar(const BatteryMonitor* batteryMonitor,
-                int16_t x,
+    UIStatusBar(int16_t x,
                 int16_t y,
                 int16_t width,
                 int16_t height);
@@ -20,6 +19,5 @@ public:
     UIElement getElement();
 
 private:
-    const BatteryMonitor* batteryMonitor_;
     int16_t x_, y_, w_, h_;
 };

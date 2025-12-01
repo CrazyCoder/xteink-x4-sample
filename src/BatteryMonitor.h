@@ -8,8 +8,11 @@
 
 class BatteryMonitor {
 public:
-  // Optional divider multiplier parameter defaults to 2.0
-  explicit BatteryMonitor(uint8_t adcPin, float dividerMultiplier = 2.0f);
+  static BatteryMonitor& getInstance() {
+      static BatteryMonitor instance(BAT_GPIO0);
+      return instance;
+  }
+
 
   // Read voltage and return percentage (0-100)
   uint16_t readPercentage() const;
@@ -33,6 +36,9 @@ public:
   bool isCharging() const;
 
 private:
+  // Optional divider multiplier parameter defaults to 2.0
+  explicit BatteryMonitor(uint8_t adcPin, float dividerMultiplier = 2.0f);
+
   uint8_t _adcPin;
   float _dividerMultiplier;
 };

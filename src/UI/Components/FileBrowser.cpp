@@ -1,11 +1,12 @@
-#include "fileBrowser.h"
-#include "../ui.h"
+#include "FileBrowser.h"
+#include "../UI.h"
 
-UIFileBrowser::UIFileBrowser(int16_t x, int16_t y, int16_t width, int16_t height)
+UIFileBrowser::UIFileBrowser(std::string path, int16_t x, int16_t y, int16_t width, int16_t height)
     : x_(x), y_(y), w_(width), h_(height),
       currentPage_(0)
 {
     rowsPerPage_ = h_ / UI_FILEBROWSER_ROWHEIGHT;
+    setPath(path);
 }
 
 void UIFileBrowser::setFiles(const std::vector<FileInfo>& files) {
@@ -15,7 +16,9 @@ void UIFileBrowser::setFiles(const std::vector<FileInfo>& files) {
 
 void UIFileBrowser::updatePagination() {
     totalPages_ = (files_.size() + rowsPerPage_ - 1) / rowsPerPage_;
-    if (currentPage_ >= totalPages_) currentPage_ = totalPages_ - 1;
+    if (currentPage_ >= totalPages_) {
+        currentPage_ = totalPages_ - 1;
+    }
 }
 
 void UIFileBrowser::nextPage() {
@@ -106,6 +109,54 @@ void UIFileBrowser::ensureSelectionVisible() {
     }
 }
 
+void UIFileBrowser::refresh() {
+    auto files = FileSystem::getInstance().readFolder(path_.c_str());
+    setFiles(files);
+}
+
+void UIFileBrowser::setPath(std::string path) {
+    path_ = path;
+    refresh();
+}
+
+void UIFileBrowser::openSelected() {
+    if (selectedIndex_ < 0 || selectedIndex_ >= (int)files_.size()) {
+        return;
+    }
+    
+    FileInfo& f = files_[selectedIndex_];
+    if (f.isDirectory) {
+        setPath(path_ + "/" + f.name);
+        currentPage_ = 0;
+        selectedIndex_ = 0;
+    } else {
+        // TODO: open file
+    }
+}
+
+void UIFileBrowser::openParentDirectory() {
+    if (path_ == "/" || path_.empty()) {
+        return;
+    }
+
+    if (path_.size() > 1 && path_.back() == '/') {
+        path_.pop_back();
+    }
+
+    size_t slashPos = path_.find_last_of('/');
+    if (slashPos == std::string::npos) {
+        setPath("/");
+        return;
+    }
+
+    std::string parent = path_.substr(0, slashPos);
+    if (parent.empty()) {
+        parent = "/";
+    }
+
+    setPath(parent);
+}
+
 bool UIFileBrowser::onEvent(UIElement* e, Button b) {
     switch (b) {
         case VOLUME_UP:
@@ -122,6 +173,14 @@ bool UIFileBrowser::onEvent(UIElement* e, Button b) {
 
         case RIGHT:
             nextPage();
+            return true;
+
+        case CONFIRM:
+            openSelected();
+            return true;
+
+        case BACK:
+            openParentDirectory();
             return true;
 
         default:

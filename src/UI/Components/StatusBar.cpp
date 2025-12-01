@@ -1,21 +1,18 @@
-#include "statusBar.h"
-#include "../ui.h"
+#include "StatusBar.h"
+#include "../UI.h"
 
-UIStatusBar::UIStatusBar(const BatteryMonitor* batteryMonitor,
-                         int16_t x,
+UIStatusBar::UIStatusBar(int16_t x,
                          int16_t y,
                          int16_t width,
                          int16_t height)
-    : batteryMonitor_(batteryMonitor),
-      x_(x),
+    : x_(x),
       y_(y),
       w_(width),
       h_(height)
 {
 }
 
-static void drawBatteryIcon(int16_t x, int16_t y, uint8_t pct)
-{
+static void drawBatteryIcon(int16_t x, int16_t y, uint8_t pct) {
     // icon size
     const int16_t w = UI_STATUSBAR_BATTERYICON_W;
     const int16_t h = UI_STATUSBAR_BATTERYICON_H;
@@ -56,22 +53,16 @@ void UIStatusBar::draw(UIElement*) {
 
     int16_t iconX = x_ + w_ - UI_STATUSBAR_BATTERYICON_W - UI_MARGIN_S;
     int16_t iconY = y_ + (UI_STATUSBAR_HEIGHT - UI_STATUSBAR_BATTERYICON_H) / 2;
-    if (batteryMonitor_) {
-        uint8_t pct = batteryMonitor_->readPercentage();
-        drawBatteryIcon(iconX, iconY, pct);
-        if (UI_STATUSBAR_SHOW_PCT) {
-            UI_DISPLAY.setCursor(x_ + UI_MARGIN_S, y_ + (h_ + UI_FONT_SMALL_SIZE) / 2);
-            UI_DISPLAY.print(pct);
-            UI_DISPLAY.print("%");
-            if (batteryMonitor_->isCharging()) {
-                UI_DISPLAY.print(" (Charging)");
-            }
-        }
-    } else {
-        drawBatteryIcon(iconX, iconY, 0);
-        if (UI_STATUSBAR_SHOW_PCT) {    
-            UI_DISPLAY.setCursor(x_ + UI_MARGIN_S, y_ + (h_ + UI_FONT_SMALL_SIZE) / 2);
-            UI_DISPLAY.print("Battery: ?");
+
+    auto& batteryMonitor = BatteryMonitor::getInstance();
+    uint8_t pct = batteryMonitor.readPercentage();
+    drawBatteryIcon(iconX, iconY, pct);
+    if (UI_STATUSBAR_SHOW_PCT) {
+        UI_DISPLAY.setCursor(x_ + UI_MARGIN_S, y_ + (h_ + UI_FONT_SMALL_SIZE) / 2);
+        UI_DISPLAY.print(pct);
+        UI_DISPLAY.print("%");
+        if (batteryMonitor.isCharging()) {
+            UI_DISPLAY.print(" (Charging)");
         }
     }
 
@@ -80,7 +71,6 @@ void UIStatusBar::draw(UIElement*) {
 }
 
 bool UIStatusBar::onEvent(UIElement*, Button) {
-    // Status bar doesn’t consume input for now
     return false;
 }
 

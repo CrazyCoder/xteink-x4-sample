@@ -1,22 +1,20 @@
 #pragma once
-#include <stdint.h>
-#include "Button.h"
 #include <GxEPD2_BW.h>
-#include "theme.h"
+#include "Button.h"
+#include "Theme.h"
 
 // Convenience macro for display type
-extern GxEPD2_BW<GxEPD2_426_GDEQ0426T82,
-                 GxEPD2_426_GDEQ0426T82::HEIGHT>* uiDisplayPtr;
+using GxEPD2_BW_426 = GxEPD2_BW<GxEPD2_426_GDEQ0426T82,
+                 GxEPD2_426_GDEQ0426T82::HEIGHT>;
+extern GxEPD2_BW_426* uiDisplayPtr;
 #define UI_DISPLAY (*uiDisplayPtr)
 
-// Forward declaration
+// Template accessor for typed pointer
 template<typename DisplayT>
-void uiInit(DisplayT* disp);
+DisplayT* uiDisplay();
 
-#ifndef UI_MAX_ELEMENTS
-#define UI_MAX_ELEMENTS 16
-#endif
-
+// Forward declarations
+class UIView; 
 struct UIElement;
 class UIWidget;
 enum Button;
@@ -33,20 +31,24 @@ struct UIElement {
     bool (*onEvent)(UIElement* e, Button b);
 };
 
-// --- Core API ---
-void uiClear();
-int  uiAddElement(const UIElement& e, bool focus = false);
 
-void uiRenderFull();
-void uiRenderPartial(int16_t x, int16_t y, int16_t w, int16_t h);
+class UI {
+public:
+    static void init(GxEPD2_BW_426* display);
 
-bool uiHandleButton(Button b);
+    // Clear screen
+    static void clear();
 
-void uiFocusNext();
-void uiFocusPrev();
-void uiSetFocus(int idx);
-int  uiGetFocus();
+    // Render active view
+    static void renderFull();
+    static void renderPartial(int16_t x, int16_t y, int16_t w, int16_t h);
 
-// Low-level access
-UIElement* uiElements();
-int        uiElementCount();
+    // Set active view
+    static void setActiveView(UIView* view);
+
+    // Forward button event to active view
+    static bool handleButton(Button b);
+
+private:
+    UI() = default;
+};

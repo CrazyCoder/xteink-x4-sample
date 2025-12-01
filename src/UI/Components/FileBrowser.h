@@ -1,22 +1,21 @@
 #pragma once
 #include <vector>
 #include <string>
-#include "widget.h"
+#include "Widget.h"
 #include "../../FileSystem.h"
 
-#define UI_FILEBROWSER_ROWHEIGHT 60
-#define UI_FILEBROWSER_PAGINATION_BAR_HEIGHT 40
+#define UI_FILEBROWSER_ROWHEIGHT 59
+#define UI_FILEBROWSER_PAGINATION_BAR_HEIGHT 42
 
 class UIFileBrowser : public UIWidget {
 public:
-    UIFileBrowser(int16_t x, int16_t y, int16_t width, int16_t height);
+    UIFileBrowser(std::string path, int16_t x, int16_t y, int16_t width, int16_t height);
 
-    // Set files to display
-    void setFiles(const std::vector<FileInfo>& files);
-
-    // Change page
+    // Nav
+    void setPath(std::string path);
     void nextPage();
     void prevPage();
+    void refresh();
 
     // Draw overrides
     void draw(UIElement* e) override;
@@ -29,6 +28,8 @@ public:
     
 private:
     int16_t x_, y_, w_, h_;
+
+    std::string path_;
     std::vector<FileInfo> files_;
     int selectedIndex_ = 0;
     int previousSelectedIndex_ = -1;
@@ -37,7 +38,10 @@ private:
     uint16_t currentPage_;
     uint16_t totalPages_;
 
+    void setFiles(const std::vector<FileInfo>& files);
     void updatePagination();
+    void openSelected();
+    void openParentDirectory();
 
     void moveSelectionUp();
     void moveSelectionDown();

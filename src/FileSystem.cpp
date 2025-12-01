@@ -5,11 +5,6 @@
 #define SD_SPI_CS   12
 #define SPI_FQ 40000000
 
-FileSystem::FileSystem()
-    : sdReady_(false)
-{
-}
-
 bool FileSystem::begin() {
     if (SD.begin(SD_SPI_CS, SPI, SPI_FQ)) {
         sdReady_ = true;
@@ -28,7 +23,9 @@ std::vector<FileInfo> FileSystem::readFolder(const char* path) {
 
     if (!sdReady_) {
         begin();
-        if (!sdReady_) return entries; // return empty if SD init fails
+        if (!sdReady_) {
+            return entries; // return empty if SD init fails
+        }
     }
 
     File dir = SD.open(path);
@@ -58,7 +55,8 @@ std::vector<FileInfo> FileSystem::readFolder(const char* path) {
             name = "";
         }
 
-        if(name == "System Volume Information" || name == "XTCache") {
+        // ignored folders
+        if (name == "System Volume Information" || name == "XTCache") {
             continue;
         }
 

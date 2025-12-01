@@ -11,7 +11,11 @@ struct FileInfo {
 
 class FileSystem {
 public:
-    FileSystem();
+    // Singleton access
+    static FileSystem& getInstance() {
+        static FileSystem instance;
+        return instance;
+    }
 
     // Initialize the SD card, returns true if success
     bool begin();
@@ -23,6 +27,7 @@ public:
     bool isReady() const;
 
 private:
+    FileSystem() {};
     uint8_t csPin_;
     bool sdReady_;
 };
