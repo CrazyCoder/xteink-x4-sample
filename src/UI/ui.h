@@ -42,6 +42,7 @@ public:
     // Render active view
     static void renderFull();
     static void renderPartial(int16_t x, int16_t y, int16_t w, int16_t h);
+    static void renderBlock(int16_t x, int16_t y, int16_t w, int16_t h, const std::function<void()>& fn);
 
     // Set active view
     static void setActiveView(UIView* view);

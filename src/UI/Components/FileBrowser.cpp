@@ -11,6 +11,8 @@ UIFileBrowser::UIFileBrowser(std::string path, int16_t x, int16_t y, int16_t wid
 
 void UIFileBrowser::setFiles(const std::vector<FileInfo>& files) {
     files_ = files;
+    currentPage_ = 0;
+    selectedIndex_ = 0;
     updatePagination();
 }
 
@@ -22,11 +24,43 @@ void UIFileBrowser::updatePagination() {
 }
 
 void UIFileBrowser::nextPage() {
-    if (currentPage_ + 1 < totalPages_) currentPage_++;
+    if (currentPage_ + 1 < totalPages_) {
+        currentPage_++;
+        selectedIndex_ = currentPage_ * rowsPerPage_;
+    }
 }
 
 void UIFileBrowser::prevPage() {
-    if (currentPage_ > 0) currentPage_--;
+    if (currentPage_ > 0) {
+        currentPage_--;
+        selectedIndex_ = currentPage_ * rowsPerPage_;
+    }
+}
+
+void UIFileBrowser::drawRow(uint16_t i) {
+    UI_DISPLAY.setFont(UI_FONT_MAIN);
+    uint16_t startIdx = currentPage_ * rowsPerPage_;
+    const auto& f = files_[i];
+    int16_t rowY = y_ + (i - startIdx) * UI_FILEBROWSER_ROWHEIGHT;
+    
+    bool isSelected = (i == selectedIndex_);
+    if (isSelected) {
+        UI_DISPLAY.fillRect(x_, rowY, w_, UI_FILEBROWSER_ROWHEIGHT, GxEPD_BLACK);
+        UI_DISPLAY.setTextColor(GxEPD_WHITE);
+    } else {
+        UI_DISPLAY.fillRect(x_, rowY, w_, UI_FILEBROWSER_ROWHEIGHT, GxEPD_WHITE);
+        UI_DISPLAY.setTextColor(GxEPD_BLACK);
+    }
+
+    // icon rectangle
+    UI_DISPLAY.drawRect(x_ + UI_MARGIN_S, rowY + 5, UI_FILEBROWSER_ROWHEIGHT - 10, UI_FILEBROWSER_ROWHEIGHT - 10, isSelected ? GxEPD_WHITE : GxEPD_BLACK);
+
+    // file name
+    UI_DISPLAY.setCursor(x_ + UI_MARGIN_S + UI_FILEBROWSER_ROWHEIGHT - 10 + UI_MARGIN_S, rowY + (UI_FILEBROWSER_ROWHEIGHT + UI_FONT_MAIN_SIZE) / 2);
+    UI_DISPLAY.print(f.name.c_str());
+
+    // divider
+    UI_DISPLAY.drawFastHLine(x_, rowY + UI_FILEBROWSER_ROWHEIGHT - 1, w_, GxEPD_BLACK);
 }
 
 void UIFileBrowser::draw(UIElement* e) {
@@ -42,27 +76,7 @@ void UIFileBrowser::draw(UIElement* e) {
     }
 
     for (uint16_t i = startIdx; i < endIdx; i++) {
-        const auto& f = files_[i];
-        int16_t rowY = startY + (i - startIdx) * rowH;
-        
-        bool isSelected = (i == selectedIndex_);
-        if (isSelected) {
-            UI_DISPLAY.fillRect(x_, rowY, w_, UI_FILEBROWSER_ROWHEIGHT, GxEPD_BLACK);
-            UI_DISPLAY.setTextColor(GxEPD_WHITE);
-        } else {
-            UI_DISPLAY.fillRect(x_, rowY, w_, UI_FILEBROWSER_ROWHEIGHT, GxEPD_WHITE);
-            UI_DISPLAY.setTextColor(GxEPD_BLACK);
-        }
-
-        // icon rectangle
-        UI_DISPLAY.drawRect(x_ + UI_MARGIN_S, rowY + 5, UI_FILEBROWSER_ROWHEIGHT - 10, UI_FILEBROWSER_ROWHEIGHT - 10, isSelected ? GxEPD_WHITE : GxEPD_BLACK);
-
-        // file name
-        UI_DISPLAY.setCursor(x_ + UI_MARGIN_S + UI_FILEBROWSER_ROWHEIGHT - 10 + UI_MARGIN_S, rowY + (UI_FILEBROWSER_ROWHEIGHT + UI_FONT_MAIN_SIZE) / 2);
-        UI_DISPLAY.print(f.name.c_str());
-
-        // divider
-        UI_DISPLAY.drawFastHLine(x_, rowY + UI_FILEBROWSER_ROWHEIGHT - 1, w_, GxEPD_BLACK);
+        drawRow(i);
     }
 
     // pagination at bottom
@@ -75,6 +89,19 @@ void UIFileBrowser::draw(UIElement* e) {
     UI_DISPLAY.print(pageBuf);
 }
 
+// Not just a draw function, this actually renders the rows
+void UIFileBrowser::renderRows(uint16_t startIdx, uint16_t endIdx) {
+    uint16_t pageStartIdx = currentPage_ * rowsPerPage_;
+    uint16_t topY = y_ + (UI_FILEBROWSER_ROWHEIGHT * (startIdx - pageStartIdx));
+    UI::renderBlock(x_, topY, w_, UI_FILEBROWSER_ROWHEIGHT * ((endIdx - pageStartIdx) + 1 - (startIdx - pageStartIdx)), [&]() {
+        for (uint16_t i = startIdx; i <= endIdx; i++) {
+            drawRow(i);
+        }
+        // top divider
+        UI_DISPLAY.drawFastHLine(x_, topY, w_, GxEPD_BLACK);
+    });
+}
+
 UIElement UIFileBrowser::getElement() {
     return UIWidget::getElement(x_, y_, w_, h_);
 }
@@ -84,29 +111,47 @@ const FileInfo* UIFileBrowser::getSelectedFile() const {
     return &files_[selectedIndex_];
 }
 
-void UIFileBrowser::moveSelectionUp() {
+// Returns whether we need to redraw all
+bool UIFileBrowser::moveSelectionUp() {
     if (selectedIndex_ > 0) {
+        uint16_t oldSelectedIndex = selectedIndex_;
         selectedIndex_--;
-        ensureSelectionVisible();
+        if (ensureSelectionVisible()) {
+            return true;
+        }
+        // redraw affected rows
+        renderRows(selectedIndex_, oldSelectedIndex);
     }
+    return false;
 }
 
-void UIFileBrowser::moveSelectionDown() {
+// Returns whether we need to redraw all
+bool UIFileBrowser::moveSelectionDown() {
     if (selectedIndex_ + 1 < (int)files_.size()) {
+        uint16_t oldSelectedIndex = selectedIndex_;
         selectedIndex_++;
-        ensureSelectionVisible();
+        if (ensureSelectionVisible()) {
+            return true;
+        }
+        // redraw affected rows
+        renderRows(oldSelectedIndex, selectedIndex_);
     }
+    return false;
 }
 
-void UIFileBrowser::ensureSelectionVisible() {
+// Returns whether the page was changed
+bool UIFileBrowser::ensureSelectionVisible() {
     uint16_t startIdx = currentPage_ * rowsPerPage_;
     uint16_t endIdx = startIdx + rowsPerPage_;
 
     if (selectedIndex_ < (int)startIdx) {
         currentPage_ = selectedIndex_ / rowsPerPage_;
+        return true;
     } else if (selectedIndex_ >= (int)endIdx) {
         currentPage_ = selectedIndex_ / rowsPerPage_;
+        return true;
     }
+    return false;
 }
 
 void UIFileBrowser::refresh() {
@@ -160,12 +205,10 @@ void UIFileBrowser::openParentDirectory() {
 bool UIFileBrowser::onEvent(UIElement* e, Button b) {
     switch (b) {
         case VOLUME_UP:
-            moveSelectionUp();
-            return true;
+            return moveSelectionUp();
 
         case VOLUME_DOWN:
-            moveSelectionDown();
-            return true;
+            return moveSelectionDown();
 
         case LEFT:
             prevPage();

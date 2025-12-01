@@ -67,7 +67,7 @@ void UIStatusBar::draw(UIElement*) {
     }
 
     // divider line below status bar
-    UI_DISPLAY.drawRect(x_, y_ + h_ -2, w_, 2, GxEPD_BLACK);
+    UI_DISPLAY.drawRect(x_, y_ + h_ - 3, w_, 2, GxEPD_BLACK);
 }
 
 bool UIStatusBar::onEvent(UIElement*, Button) {

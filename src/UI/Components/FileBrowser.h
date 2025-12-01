@@ -19,6 +19,8 @@ public:
 
     // Draw overrides
     void draw(UIElement* e) override;
+    void drawRow(uint16_t i);
+    void renderRows(uint16_t startIdx, uint16_t endIdx);
     bool onEvent(UIElement* e, Button b) override;
 
     UIElement getElement();
@@ -43,7 +45,7 @@ private:
     void openSelected();
     void openParentDirectory();
 
-    void moveSelectionUp();
-    void moveSelectionDown();
-    void ensureSelectionVisible();
+    bool moveSelectionUp();
+    bool moveSelectionDown();
+    bool ensureSelectionVisible();
 };

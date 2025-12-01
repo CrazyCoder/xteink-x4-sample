@@ -59,3 +59,13 @@ void UI::renderPartial(int16_t x, int16_t y, int16_t w, int16_t h) {
         g_activeView->drawPartial(x, y, w, h);
     } while (uiDisplayPtr->nextPage());
 }
+
+void UI::renderBlock(int16_t x, int16_t y, int16_t w, int16_t h, const std::function<void()>& fn) {
+    if (!uiDisplayPtr) return;
+
+    uiDisplayPtr->setPartialWindow(x, y, w, h);
+    uiDisplayPtr->firstPage();
+    do {
+        fn();
+    } while (uiDisplayPtr->nextPage());
+}
